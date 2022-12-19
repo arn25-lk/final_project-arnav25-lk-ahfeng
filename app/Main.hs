@@ -87,7 +87,7 @@ draw f = [C.vCenter $ C.hCenter form <=> C.hCenter help]
         form = B.border $ padTop (Pad 1) $ hLimit 50 $ renderForm f
         help = padTop (Pad 1) $ B.borderWithLabel (str "Help") body
         body = str $ "- Enter number of rows and columns\n" <>
-                     "- Must be an integers\n" <>
+                     "- Must be integers\n" <>
                      "- Press Enter to continue"
 app :: App (Form GridInfo e Name) e Name
 app =

@@ -122,10 +122,19 @@ drawGrid grid = C.center $ renderTable (gridTable grid)
 --         drawForm f = C.vCenter $ C.hCenter $ renderForm f
 
 draw :: Form GridInfo e Name -> [Widget Name]
-draw f = [C.vCenter $ C.hCenter form <=> C.hCenter gridVisual]
+draw f = 
+  [C.vCenter $ C.hCenter form <=> C.hCenter gridVisual <=> C.hCenter help]
     where
         form = B.border $ padTop (Pad 1) $ hLimit 50 $ renderForm f
         gridVisual = B.border $ padTop (Pad 1) $ drawGrid (_grid (formState f))
+        help = padTop (Pad 1) $ B.borderWithLabel (str "Help") body
+        body = str $ "- Press Tab to change field\n" <>
+                     "- Set Row and Column to select tile to edit\n" <>
+                     "- Row and Column must be valid integers (0-index)\n" <>
+                     "  Press Space to toggle traversiblity\n" <>
+                     "- Press Enter to update tile\n" <>
+                     "- Press Esc to exit" 
+
 
 theMap :: AttrMap
 theMap = attrMap V.defAttr
