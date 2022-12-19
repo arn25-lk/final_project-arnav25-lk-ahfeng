@@ -10,7 +10,7 @@ import  Data.Stack
 -- place is just index
 
 
--- you can change the type of node to be anything you want
+
 
 data Node = N {name:: String, getX :: Float, getY :: Float} deriving (Show, Eq)
 -- data Graph = G Vertices Edges deriving Show 
@@ -55,6 +55,7 @@ data SPConfig = SPConfig {
 } 
 
 data Snapshot = Snapshot {
+    -- Explored shortest
     expNodes :: [Node],
     -- Explored edges 
     expEdges :: Path,
@@ -81,15 +82,11 @@ class Monoid a => ExploreList a where
     addFromTo :: a -> a -> a
 
 
-
-
-
 instance ExploreList (Stack Node) where
     push = stackPush
     pop = stackPop 
     isEmpty = stackIsEmpty
     addFromTo = mappend
-    
 
 
 data GraphState = GraphST {
@@ -116,20 +113,16 @@ instance Eq (Stack Node) where
 
 -- reader shouldn't be start state, config file 
 -- make rendering datatype 
-newtype SPContext st = SP { context :: RWS SPConfig (T.Text, Snapshot) GraphState st } deriving (Monad, 
+newtype SPContext st = SP { context :: RWS SPConfig [Snapshot] GraphState st } deriving (Monad, 
                                                                         Functor, 
                                                                         Applicative, 
                                                                         MonadReader SPConfig,                 
-                                                                        MonadWriter (T.Text, Snapshot), 
+                                                                        MonadWriter [Snapshot], 
                                                                         MonadState GraphState)
 
 
-
-logFunc :: GraphState -> SPContext ()
-logFunc = undefined
-
 -- iterative deepening dfs
-dfsStep ::  GraphMap -> GraphState -> SPContext GraphState
+dfsStep ::  GraphMap -> GraphState -> SPContext ()
 dfsStep graphMap graphState = do
     SPConfig {endNode = endNode} <- ask 
     GraphST {visited = visited, orderExplore = orderExplore} <- get
@@ -141,10 +134,10 @@ dfsStep graphMap graphState = do
             let neighbors = graphMap Map.! node
             let cdls = filter (`notElem` visited) (map dest neighbors) 
             let visited' = visited ++ [node]
-            let nextGraphState = GraphST {visited = visited',  orderExplore = foldr push rest cdls }
-            logFunc nextGraphState cdls
-            put nextGraphState 
-            return nextGraphState
+            let nextGraphState = GraphST {visited = visited',  orderExplore =  foldl push rest cdls }
+            tell Snapshot {expNodes = cdls, expEdges = neighbors, spPath = [], bestEstim = 0, maxDepth = 0}
+            put nextGraphState
+            
 
 -- | Iterative deepening depth first search
 
