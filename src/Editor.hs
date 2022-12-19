@@ -2,8 +2,8 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE OverloadedStrings #-}
 module Editor 
-    ( EditState(..)
-    , TileInfo(..)
+    ( 
+      GridInfo(..)
     , editorApp
     , drawGrid
     , initEditor
@@ -11,9 +11,11 @@ module Editor
 
 import GridMap ( Grid(..), Tile(..)
                , getTile, gridToGraph, adjacents, simpleGrid, getNeighbors
-               , setNeighbors, setTraversible, setElevation, gridFromList)
+               , setNeighbors, setTraversible, setElevation, setTile
+               , gridFromList)
 
 import Control.Monad (forever, void)
+import Lens.Micro ((^.))
 import Lens.Micro.TH
 import Brick
 import Brick.BChan (newBChan, writeBChan)
@@ -38,36 +40,46 @@ import Brick.Forms
   , editPasswordField
   , (@@=)
   )
+import Brick.Focus
+  ( focusGetCurrent
+  , focusRingCursor
+  )  
 import qualified Brick.Widgets.Border as B
-import qualified Brick.Widgets.Center as B
 import qualified Brick.Widgets.Border.Style as BS
 import qualified Brick.Widgets.Center as C
 import qualified Brick.Util as U
 import qualified Graphics.Vty as V
+import qualified Brick.Types as B
 import Data.Sequence (Seq)
 import qualified Data.Sequence as S
+import qualified Brick.Widgets.Edit as E
 
 data Name = ElevationField
           | TraversibleField
+          | GridField
+          | CurRowField
+          | CurColField
           deriving (Eq, Ord, Show)
+blockedAttr = attrName "blocked"
+lowAttr = attrName "low"
+mediumAttr = attrName "medium"
+highAttr = attrName "high"
+selectedAttr = attrName "selected"
 
 
-
-data TileInfo = TileInfo
-  { _elevationVal :: Int
+data GridInfo = GridInfo
+  { _elevationVal :: Float
   , _isTraversible :: Bool
-  }
-
-data EditState = EditState
-  { grid :: Grid
-  , cursor :: (Int, Int)
-  , form :: Form TileInfo () Name
+  , _curRow :: Int
+  , _curCol :: Int
+  , _grid :: Grid
   }
 
 
-makeLenses ''TileInfo
 
-mkForm :: TileInfo -> Form TileInfo () Name
+makeLenses ''GridInfo
+
+mkForm :: GridInfo -> Form GridInfo () Name
 mkForm =
     let label s w = padBottom (Pad 1) $
                     (vLimit 1 $ hLimit 15 $ str s <+> fill ' ') <+> w
@@ -75,69 +87,102 @@ mkForm =
                    editShowableField elevationVal ElevationField
                , label "" @@=
                    checkboxField isTraversible TraversibleField "Traversible?"
+               , label "Current Row" @@=
+                   editShowableField curRow CurRowField
+                , label "Current Column" @@=
+                   editShowableField curCol CurColField
+               
                ]
 
 drawTable :: Table Name -> Widget Name
 drawTable table = C.center $ renderTable table
 
-drawTile :: Tile -> String
-drawTile tile = if traversible tile then show (elevation tile) else "X"
+drawTile :: Tile -> Widget Name
+drawTile t = case (traversible t, elevation t) of
+    (True, elev) -> withAttr heightAttr $ (str . show) elev
+    (False, _) -> withAttr blockedAttr $ str "X"
+    where
+        heightAttr = case elevation t of
+            elev | elev < -5 -> lowAttr
+                 | elev < 5 -> mediumAttr
+                 | otherwise -> highAttr
 
 gridTable :: Grid -> Table Name
-gridTable grid = table (map (\r -> map (\c -> str (drawTile (getTile grid r c))) [0..cols grid - 1]) [0..rows grid - 1])
+gridTable grid = table $ 
+  map (\r -> map (\c -> drawTile (getTile grid r c)) [0..cols grid - 1]) 
+  [0..rows grid - 1]
 
 drawGrid :: Grid -> Widget Name
 drawGrid grid = C.center $ renderTable (gridTable grid)
 
 
-drawEditor :: EditState -> [Widget Name]
-drawEditor s = [drawGrid (grid s) <=> drawForm (form s) <=> drawCursor (cursor s)]
-    where 
-        drawForm f = C.vCenter $ C.hCenter $ renderForm f
-        drawCursor (r, c) = C.vCenter $ C.hCenter $ str $ "Cursor: " ++ show r ++ ", " ++ show c  
-editorApp :: B.App EditState e Name
+-- drawEditor :: EditState -> [Widget Name]
+-- drawEditor s = [drawGrid (grid s) <=> drawForm (form s) ]
+--     where 
+--         drawForm f = C.vCenter $ C.hCenter $ renderForm f
+
+draw :: Form GridInfo e Name -> [Widget Name]
+draw f = [C.vCenter $ C.hCenter form <=> C.hCenter gridVisual]
+    where
+        form = B.border $ padTop (Pad 1) $ hLimit 50 $ renderForm f
+        gridVisual = B.border $ padTop (Pad 1) $ drawGrid (_grid (formState f))
+
+theMap :: AttrMap
+theMap = attrMap V.defAttr
+  [ (E.editAttr, V.white `on` V.black)
+  , (E.editFocusedAttr, V.black `on` V.yellow)
+  , (invalidFormInputAttr, V.white `on` V.red)
+  , (focusedFormInputAttr, V.black `on` V.yellow)
+  , (blockedAttr, V.white `on` V.black)
+  , (lowAttr, V.white `on` V.red)
+  , (mediumAttr, V.white `on` V.yellow)
+  , (highAttr, V.white `on` V.green)
+  ]
+
+editorApp :: B.App (Form GridInfo e Name) e Name
 editorApp = B.App
-  { B.appDraw = drawEditor
-  , B.appChooseCursor = B.showFirstCursor
+  { B.appDraw = draw
+  , B.appChooseCursor = focusRingCursor formFocus
   , B.appHandleEvent = handleEvent
   , B.appStartEvent = return ()
-  , B.appAttrMap = const $ attrMap V.defAttr []
+  , B.appAttrMap = const theMap
   }
 
--- | Move the cursor by the given amount, while keeping it inside of bounds
-moveCursor :: (Int, Int) -> EventM Name EditState ()
-moveCursor (r, c) = do
+
+
+handleEvent :: B.BrickEvent Name e -> EventM Name (Form GridInfo e Name) ()
+handleEvent ev = do
     s <- B.get
-    let (r', c') = cursor s
-    let newCursor = (r' + r, c' + c)
-    let (r'', c'') = newCursor
-    let (rows', cols') = (rows (grid s), cols (grid s))
-    if r'' >= 0 && r'' < rows' && c'' >= 0 && c'' < cols'
-        then B.put s {cursor = newCursor}
-        else return ()
+    f <- B.gets formFocus
+    case ev of
+      VtyEvent (V.EvResize {}) -> return ()
+      VtyEvent (V.EvKey V.KEsc []) -> halt
+      VtyEvent (V.EvKey V.KEnter []) -> updateGrid
+      _ -> do
+          handleFormEvent ev
+          st <- gets formState
+          modify $ setFieldValid (st^.curRow >= 0 && st^.curRow < rows (st^.grid)) CurRowField
+          modify $ setFieldValid (st^.curCol >= 0 && st^.curCol < cols (st^.grid)) CurColField
+      where
+          updateGrid = do
+              s <- B.get
+              if allFieldsValid s
+                  then do
+                    let f = formState s
+                    let grid = _grid f
+                    let r = _curRow f
+                    let c = _curCol f
+                    let tile = getTile grid r c
+                    let newTile = tile {elevation = _elevationVal f, traversible = _isTraversible f}
+                    let newGrid = setTile grid r c newTile
+                    B.put s {formState = f {_grid = newGrid}}
+                    return ()
+                  else return ()
 
 
-handleEvent :: B.BrickEvent Name e -> EventM Name EditState ()
-handleEvent ev = case ev of
-    B.VtyEvent (V.EvKey V.KUp []) -> moveCursor (-1, 0)
-    B.VtyEvent (V.EvKey V.KDown []) -> moveCursor (1, 0)
-    B.VtyEvent (V.EvKey V.KLeft []) -> moveCursor (0, -1)
-    B.VtyEvent (V.EvKey V.KRight []) -> moveCursor (0, 1)
-    B.VtyEvent (V.EvKey (V.KChar 'q') []) -> B.halt 
-    -- B.VtyEvent (V.EvKey (V.KChar 'e') []) -> do
-    --     s <- B.get
-    --     let (r, c) = cursor s
-    --     let tile = getTile (grid s) r c
-    --     let newTile = tile {elevation = elevationVal (formState (form s))}
-    --     let newGrid = setElevation (grid s) r c newTile
-    --     B.put s {grid = newGrid}
-    -- B.VtyEvent (V.EvKey (V.KChar 't') []) -> do
-    --     s <- B.get
-    --     let (r, c) = cursor s
-    --     let tile = getTile (grid s) r c
-    --     let newTile = tile {traversible = isTraversible (formState (form s))}
-    --     let newGrid = setTraversible (grid s) r c newTile
-    --     B.put s {grid = newGrid}
+
+
+  
 
 
 
@@ -148,5 +193,5 @@ initEditor grid = do
     let buildVty = V.mkVty V.defaultConfig
     initialVty <- buildVty
     let app = editorApp
-    let state = EditState grid (0, 0) (mkForm (TileInfo 0 True))
-    void $ customMain initialVty buildVty (Just chan) app state
+    let state = mkForm (GridInfo 0 True 0 0 grid)
+    void $ customMain initialVty buildVty (Just chan) app state 
