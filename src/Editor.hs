@@ -116,10 +116,6 @@ drawGrid :: Grid -> Widget Name
 drawGrid grid = C.center $ renderTable (gridTable grid)
 
 
--- drawEditor :: EditState -> [Widget Name]
--- drawEditor s = [drawGrid (grid s) <=> drawForm (form s) ]
---     where 
---         drawForm f = C.vCenter $ C.hCenter $ renderForm f
 
 draw :: Form GridInfo e Name -> [Widget Name]
 draw f = 
