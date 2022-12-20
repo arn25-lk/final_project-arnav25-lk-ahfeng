@@ -13,6 +13,8 @@ import GridMap ( Grid(..), Tile(..)
                , getTile, gridToGraph, adjacents, simpleGrid, getNeighbors
                , setNeighbors, setTraversible, setElevation, setTile
                , gridFromList)
+import Graph (Snapshot(..))
+import Visualizer (renderSnapshots)
 
 import Control.Monad (forever, void)
 import Lens.Micro ((^.))
@@ -94,8 +96,6 @@ mkForm =
                
                ]
 
-drawTable :: Table Name -> Widget Name
-drawTable table = C.center $ renderTable table
 
 drawTile :: Tile -> Widget Name
 drawTile t = case (traversible t, elevation t) of
@@ -191,10 +191,40 @@ handleEvent ev = do
 
 
 
-  
+-- Placeholder for the actual snapshots  
 
+testSnapshot1 :: Snapshot
+testSnapshot1 = Snapshot 
+  { expNodes = [0]
+  , expEdges = []
+  , selNodes = []
+  , spPath = []
+  , bestEstim = 0
+  , maxDepth = 0
+  }
 
+testSnapshot2 :: Snapshot
+testSnapshot2 = Snapshot 
+  { expNodes = [0,1,6]
+  , expEdges = []
+  , selNodes = [0]
+  , spPath = []
+  , bestEstim = 0
+  , maxDepth = 0
+  }
 
+testSnapshot3 :: Snapshot
+testSnapshot3 = Snapshot 
+  { expNodes = [0,1,6,2,7,11]
+  , expEdges = []
+  , selNodes = [0,1,6]
+  , spPath = []
+  , bestEstim = 0
+  , maxDepth = 0
+  }
+
+testSnapshots :: [Snapshot]
+testSnapshots = [testSnapshot1, testSnapshot2, testSnapshot3]
 
 initEditor :: Grid -> IO ()
 initEditor grid = do
@@ -203,4 +233,5 @@ initEditor grid = do
     initialVty <- buildVty
     let app = editorApp
     let state = mkForm (GridInfo 0 True 0 0 grid)
-    void $ customMain initialVty buildVty (Just chan) app state 
+    s' <- customMain initialVty buildVty (Just chan) app state 
+    renderSnapshots (_grid (formState s')) testSnapshots
