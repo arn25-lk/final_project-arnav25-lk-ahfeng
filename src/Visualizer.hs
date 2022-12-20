@@ -133,7 +133,6 @@ renderSnapshots g (snapshot:snapshots) = do
           v <- V.mkVty =<< V.standardIOConfig
           V.setMode (V.outputIface v) V.Mouse True
           return v
-    print vGrid
     initialVty <- buildVty
     customMain initialVty buildVty Nothing visualizerApp vGrid
     renderSnapshots g snapshots
