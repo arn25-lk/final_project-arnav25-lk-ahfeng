@@ -10,6 +10,7 @@ import Graph (Edge(E), GraphMap)
 import Data.Map (Map)
 import qualified Data.Map as Map
 
+
 import Test.QuickCheck
   (Arbitrary (..),
   Gen,
@@ -20,10 +21,12 @@ import Test.QuickCheck
   )
 import qualified Test.QuickCheck as QC
 
--- | Identifier for tiles in a grid
+-- | Identifier for tiles in a grid, also index in the list of tiles
 type Place = Int
 -- | A map tile with an elevation, whether it is traversible
-data Tile = Tile { place :: Place, elevation :: Float, traversible :: Bool} deriving (Show, Eq)
+data Tile = Tile 
+  { place :: Place, elevation :: Float, traversible :: Bool
+  , xVal :: Int, yVal :: Int} deriving (Show, Eq)
 
 -- | A grid of tiles with a given number of rows and columns, 
 data Grid = Grid 
@@ -33,7 +36,7 @@ data Grid = Grid
   } deriving (Show, Eq)
 
 -- | Get the tile at the given row and column in the grid
-getTile :: Grid -> Int -> Int -> Tile -- row <= rows, col <= cols
+getTile :: Grid -> Int -> Int -> Tile 
 getTile grid row col = case (row >= 0 && row < rows grid, col >= 0 && col < cols grid) of
   (True, True) -> tiles grid !! (row * cols grid + col)
   _ -> error "Invalid row or column"
@@ -65,27 +68,27 @@ adjacents rows cols place = filter (\p -> p >= 0 && p < rows * cols)
 -- | Create a grid of traversible tiles with 0 elevation with the given dimensions
 simpleGrid :: Int -> Int -> Grid
 simpleGrid rows cols = updateNeighbors $ 
-  Grid rows cols (map (\p -> Tile p 0 True) [0..rows * cols - 1]) Map.empty
+  Grid rows cols (map (\p -> Tile p 0 True (p `div` cols) (p `mod` cols)) [0..rows * cols - 1]) Map.empty
 
 -- | Create a grid from a list of elevations and a list of traversibility
 gridFromList :: Int -> Int -> [Float] -> [Bool] -> Grid 
 --TODO: check that the lists are the right length
 gridFromList rows cols elevations traversible = updateNeighbors $ 
   Grid rows cols 
-  (map (\p -> Tile p (elevations !! p) (traversible !! p)) 
+  (map (\p -> Tile p (elevations !! p) (traversible !! p)(p `div` cols) (p `mod` cols)) 
     [0..rows * cols - 1]) 
   Map.empty
 
 -- | Get the new neighbors of a tile in the grid based on traversibility
 getNeighbors :: Grid -> Int -> Int -> [Place]
 getNeighbors grid row col = filter 
-  (\p -> traversible (getTile grid (p `div` cols grid) (p `mod` cols grid))) 
+  (\p -> traversible (getPlaceTile grid p)) 
   (adjacents (rows grid) (cols grid) (row * cols grid + col))
 
 -- | Same as getNeighbors, but indexed by Place instead of row and column
 getPlaceNeighbors :: Grid -> Place -> [Place]
 getPlaceNeighbors grid place = filter 
-  (\p -> traversible (getTile grid (p `div` cols grid) (p `mod` cols grid)))
+  (\p -> traversible (getPlaceTile grid p))
   (adjacents (rows grid) (cols grid) place)
 
 -- | Set the neighbors of a tile in the grid
