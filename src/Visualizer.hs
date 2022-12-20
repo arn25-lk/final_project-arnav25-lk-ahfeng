@@ -46,23 +46,29 @@ import Data.Sequence (Seq)
 import qualified Data.Sequence as S
 import qualified Brick.Widgets.Edit as E
 
+-- | Attributes to show types of tiles
 blockedAttr = attrName "blocked"
 unseenAttr = attrName "unseen"
 exploredAttr = attrName "explored"
 selectedAttr = attrName "selected"
 
+-- | A container for tiles with additional fields for rendering
 data VisTile  = VisTile { tile :: Tile
                         , explored :: Bool
                         , selected :: Bool
                         } deriving (Show)
+
+-- | Analog of Grid, but with VisTiles
 data VisGrid = VisGrid { vRows :: Int
                        , vCols :: Int
                        , visTiles :: [VisTile]
                        } deriving (Show)
 
+-- | Build a VisGrid without snapshot information from a Grid 
 buildVisGrid :: Grid -> VisGrid
 buildVisGrid g = VisGrid (rows g) (cols g) (map (\t -> VisTile t False False) (tiles g))
 
+-- | Update the VisGrid with the information from a Snapshot
 updateVisGrid :: VisGrid -> [Place] -> [Place] -> VisGrid
 updateVisGrid vGrid explored selected = 
     let
@@ -76,6 +82,7 @@ updateVisGrid vGrid explored selected =
     in
         vGrid { visTiles = vTiles' }
 
+-- | Create a Widget for a VisTile with the correct attributes
 drawVisTile :: VisTile -> Widget ()
 drawVisTile (VisTile t explored selected) = case traversible t of
     False -> withAttr blockedAttr (str "X")
@@ -87,12 +94,14 @@ drawVisTile (VisTile t explored selected) = case traversible t of
         in
             withAttr tileAttr'' (str (show (elevation t)))
 
+-- | Get a VisTile from a VisGrid
 getVisTile :: VisGrid -> Int -> Int -> VisTile
 getVisTile vGrid r c = 
     case (r >= 0 && r < vRows vGrid && c >= 0 && c < vCols vGrid) of
         True -> visTiles vGrid !! (r * vCols vGrid + c)
         False -> error "Invalid row or column"
 
+-- | Create a Table from a VisGrid
 visGridTable :: VisGrid -> Table ()
 visGridTable vGrid = table $ 
   map (\r -> 
@@ -100,6 +109,7 @@ visGridTable vGrid = table $
     [0..vCols vGrid- 1]) 
   [0..vRows vGrid - 1]
 
+-- | Create a list of Widgets from a VisGrid
 drawVisGrid :: VisGrid -> [Widget ()]
 drawVisGrid vGrid = [C.center $ renderTable (visGridTable vGrid)]
 
@@ -125,6 +135,7 @@ visualizerApp = App { appDraw = drawVisGrid
                     , appAttrMap = const theMap
                     }
 
+-- | Display a list of snapshots one at a time
 renderSnapshots :: Grid -> [Snapshot] -> IO ()
 renderSnapshots g (snapshot:snapshots) = do
     let
@@ -136,3 +147,4 @@ renderSnapshots g (snapshot:snapshots) = do
     initialVty <- buildVty
     customMain initialVty buildVty Nothing visualizerApp vGrid
     renderSnapshots g snapshots
+renderSnapshots g [] = return ()
