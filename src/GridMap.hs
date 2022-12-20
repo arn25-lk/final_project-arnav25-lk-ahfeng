@@ -54,7 +54,7 @@ edge t1 t2 = E (place t1) (place t2) (abs (elevation t1 - elevation t2))
 -- | Turn a grid into a graph by iterating through the grid and creating edges 
 -- between traversible neighbors with weight equal to the difference in 
 -- elevation
-gridToGraph :: Grid -> GraphMap Float
+gridToGraph :: Grid -> GraphMap
 gridToGraph grid = Map.fromList $ 
   map (\t -> (place t, map (edge t . (getPlaceTile grid)) (getPlaceNeighbors grid (place t)))) 
   (tiles grid)
