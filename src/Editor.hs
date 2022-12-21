@@ -196,7 +196,6 @@ testSnapshot1 = Snapshot
   , selNodes = []
   , spPath = []
   , bestEstim = 0
-  , maxDepth = 0
   }
 
 testSnapshot2 :: Snapshot
@@ -206,7 +205,6 @@ testSnapshot2 = Snapshot
   , selNodes = [0]
   , spPath = []
   , bestEstim = 0
-  , maxDepth = 0
   }
 
 testSnapshot3 :: Snapshot
@@ -216,7 +214,6 @@ testSnapshot3 = Snapshot
   , selNodes = [0,1,6]
   , spPath = []
   , bestEstim = 0
-  , maxDepth = 0
   }
 
 testSnapshots :: [Snapshot]
